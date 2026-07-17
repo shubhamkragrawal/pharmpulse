@@ -1,0 +1,16 @@
+name: 'pharmapulse'
+version: '1.0.0'
+config-version: 2
+
+profile: 'pharmapulse'
+
+model-paths: ["models", "../domains/{{ env_var('ACTIVE_DOMAIN', 'pharma') }}/dbt/models"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+
+models:
+  pharmapulse:
+    staging:
+      +materialized: view
+    marts:
+      +materialized: table

@@ -1,0 +1,13 @@
+ct_studies:
+  nct_id: protocolSection.identificationModule.nctId
+  brief_title: protocolSection.identificationModule.briefTitle
+  overall_status: protocolSection.statusModule.overallStatus
+  phase: protocolSection.designModule.phases
+  enrollment_count: protocolSection.designModule.enrollmentInfo.count
+  start_date: protocolSection.statusModule.startDateStruct.date
+  completion_date: protocolSection.statusModule.completionDateStruct.date
+
+fda_applications:
+  application_number: application_number
+  sponsor_name: sponsor_name
+  submission_type: submissions.submission_type

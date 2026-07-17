@@ -1,0 +1,10 @@
+domain: pharma
+refresh_cadence: daily
+
+extraction:
+  ctgov:
+    extractor_class: CTGovExtractor
+    page_size: 1000
+  openfda:
+    extractor_class: OpenFDAExtractor
+    page_size: 100
