@@ -1,0 +1,163 @@
+version: 2
+
+models:
+  - name: stg_trials
+    description: One row per ClinicalTrials.gov study (grain = nct_id), field-mapped from raw.ct_studies per field_mappings.yaml.
+    columns:
+      - name: nct_id
+        description: Natural key, ClinicalTrials.gov study identifier.
+        tests:
+          - not_null
+          - unique
+      - name: brief_title
+        description: Study title. NULL passthrough if CT.gov omits it (not observed in practice, but not schema-guaranteed).
+      - name: overall_status
+        description: Current recruitment/completion status.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - ACTIVE_NOT_RECRUITING
+                  - APPROVED_FOR_MARKETING
+                  - AVAILABLE
+                  - COMPLETED
+                  - ENROLLING_BY_INVITATION
+                  - NO_LONGER_AVAILABLE
+                  - NOT_YET_RECRUITING
+                  - RECRUITING
+                  - SUSPENDED
+                  - TEMPORARILY_NOT_AVAILABLE
+                  - TERMINATED
+                  - UNKNOWN
+                  - WITHDRAWN
+                  - WITHHELD
+      - name: phase
+        description: >
+          Pipe-delimited list of trial phases (a trial can span more than one, e.g.
+          "PHASE1|PHASE2"). NULL passthrough strategy: observational studies have no
+          phase by design (~24% of rows) -- not treated as missing data, no imputation
+          applied. data_completeness_flag is added at the mart level per spec policy.
+      - name: enrollment_count
+        description: >
+          Target/actual enrollment count. NULL passthrough strategy (~1.2% of rows,
+          concentrated in older trials) -- no imputation applied at staging.
+      - name: start_date
+        description: >
+          Study start date. Imputation: CT.gov reports ~37% of rows at year-month
+          precision only (e.g. "2020-07") -- day is defaulted to the 1st for those.
+          True absence (~0.9% of rows) passes through as NULL.
+      - name: completion_date
+        description: >
+          Study completion date. Same imputation as start_date (day defaulted to 1st
+          for year-month-only dates, ~39% of rows). True absence (~2.8% of rows)
+          passes through as NULL.
+      - name: sponsor_name
+        description: Lead sponsor name (protocolSection.sponsorCollaboratorsModule.leadSponsor.name).
+        tests:
+          - relationships:
+              arguments:
+                to: ref('stg_sponsors')
+                field: sponsor_name
+      - name: sponsor_class
+        description: >
+          Lead sponsor class as reported by CT.gov. NULL passthrough (~0.16% of rows)
+          -- no imputation applied; stg_sponsors resolves a single class per sponsor_name.
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - AMBIG
+                  - FED
+                  - INDIV
+                  - INDUSTRY
+                  - NETWORK
+                  - NIH
+                  - OTHER
+                  - OTHER_GOV
+                  - UNKNOWN
+              config:
+                where: "sponsor_class is not null"
+
+  - name: stg_sponsors
+    description: >
+      One row per distinct sponsor_name observed in stg_trials. sponsor_class is
+      resolved to the single most-frequent value reported for that sponsor across
+      trials (imputation: mode, ties broken alphabetically) since the same sponsor
+      occasionally reports inconsistent classes across trials in the raw data.
+    columns:
+      - name: sponsor_name
+        description: Natural key.
+        tests:
+          - not_null
+          - unique
+      - name: sponsor_class
+        description: Mode-resolved sponsor class (see model description).
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - AMBIG
+                  - FED
+                  - INDIV
+                  - INDUSTRY
+                  - NETWORK
+                  - NIH
+                  - OTHER
+                  - OTHER_GOV
+                  - UNKNOWN
+              config:
+                where: "sponsor_class is not null"
+
+  - name: stg_approvals
+    description: >
+      One row per (application_number, submission_type, submission_number) submission
+      event, flattened from raw.fda_applications' submissions array. Applications with
+      no submissions array are excluded (row-exclusion strategy); the excluded count is
+      logged to ops.extraction_log by this model's post-hook on every run.
+    columns:
+      - name: approval_key
+        description: Surrogate key over (application_number, submission_type, submission_number).
+        tests:
+          - not_null
+          - unique
+      - name: application_number
+        description: Drugs@FDA application identifier (not unique alone -- one application has many submissions).
+        tests:
+          - not_null
+      - name: sponsor_name
+        description: Applicant sponsor name as reported by openFDA (distinct namespace from CT.gov sponsor_name -- not joined to stg_sponsors).
+      - name: submission_type
+        description: ORIG (original application) or SUPPL (supplement).
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - ORIG
+                  - SUPPL
+      - name: submission_number
+        description: Sequence number within submission_type for this application (not globally unique -- see approval_key).
+        tests:
+          - not_null
+      - name: submission_status
+        description: >
+          AP (approved) or TA (tentatively approved). NULL passthrough for the small
+          number of submissions (<0.01%) missing a status.
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - AP
+                  - TA
+              config:
+                where: "submission_status is not null"
+      - name: submission_status_date
+        description: >
+          Date the submission reached submission_status. NULL passthrough for the
+          handful of submissions (<0.01%) missing a status date.
+      - name: review_priority
+        description: >
+          STANDARD or PRIORITY FDA review track. NULL passthrough strategy (~43% of
+          submissions, concentrated in older/manufacturing-only submissions where
+          openFDA doesn't report a review track) -- no imputation applied.

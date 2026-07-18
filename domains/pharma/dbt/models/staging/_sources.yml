@@ -1,0 +1,28 @@
+version: 2
+
+sources:
+  - name: raw
+    schema: raw
+    tables:
+      - name: ct_studies
+        description: One row per ClinicalTrials.gov study, raw JSON payload keyed on nct_id.
+        loaded_at_field: fetched_at
+        freshness:
+          warn_after: {count: 26, period: hour}
+          error_after: {count: 50, period: hour}
+        columns:
+          - name: nct_id
+            tests:
+              - unique
+              - not_null
+      - name: fda_applications
+        description: One row per Drugs@FDA application, raw JSON payload keyed on application_number.
+        loaded_at_field: fetched_at
+        freshness:
+          warn_after: {count: 26, period: hour}
+          error_after: {count: 50, period: hour}
+        columns:
+          - name: application_number
+            tests:
+              - unique
+              - not_null
