@@ -6,8 +6,14 @@ ct_studies:
   enrollment_count: protocolSection.designModule.enrollmentInfo.count
   start_date: protocolSection.statusModule.startDateStruct.date
   completion_date: protocolSection.statusModule.completionDateStruct.date
+  sponsor_name: protocolSection.sponsorCollaboratorsModule.leadSponsor.name
+  sponsor_class: protocolSection.sponsorCollaboratorsModule.leadSponsor.class
 
 fda_applications:
   application_number: application_number
   sponsor_name: sponsor_name
   submission_type: submissions.submission_type
+  submission_number: submissions.submission_number
+  submission_status: submissions.submission_status
+  submission_status_date: submissions.submission_status_date
+  review_priority: submissions.review_priority

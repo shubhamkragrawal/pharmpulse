@@ -30,6 +30,11 @@ class CTGovExtractor(BaseExtractor):
 
 
 class OpenFDAExtractor(BaseExtractor):
+    """Keyset-paginated on application_number: openFDA's `skip` param hard-errors
+    past ~25,000, so `cursor` here holds the last-seen application_number rather
+    than an opaque token, and each page is fetched with an exclusive lower-bound
+    range filter instead of a growing skip offset."""
+
     source_name = "openfda"
     target_table = "raw.fda_applications"
     record_id_field = "application_number"
@@ -37,15 +42,16 @@ class OpenFDAExtractor(BaseExtractor):
     base_url = "https://api.fda.gov/drug/drugsfda.json"
 
     def fetch_page(self, page_index: int, cursor: str | None) -> PageResult:
-        skip = page_index * self.page_size
-        params = {"limit": self.page_size, "skip": skip}
+        params: dict[str, Any] = {"limit": self.page_size, "sort": "application_number:asc"}
+        if cursor:
+            params["search"] = f"application_number:{{{cursor} TO *}}"
         resp = requests.get(self.base_url, params=params, timeout=30)
         resp.raise_for_status()
         body = resp.json()
         results = body.get("results", [])
-        total = body.get("meta", {}).get("results", {}).get("total", 0)
-        has_more = skip + len(results) < total
-        return PageResult(records=results, has_more=has_more)
+        has_more = len(results) == self.page_size
+        next_cursor = results[-1]["application_number"] if results else cursor
+        return PageResult(records=results, has_more=has_more, next_cursor=next_cursor)
 
     def record_id(self, record: dict[str, Any]) -> str:
         return record["application_number"]
