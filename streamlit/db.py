@@ -15,12 +15,19 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+def _get_secret(key: str, default: str | None = None) -> str | None:
+    """st.secrets first (Streamlit Community Cloud), os.environ/.env fallback (local/Docker)."""
+    if key in st.secrets:
+        return st.secrets[key]
+    return os.environ.get(key, default)
+
+
 def _build_readonly_dsn() -> str:
-    host = os.environ.get("POSTGRES_HOST", "localhost")
-    port = os.environ.get("POSTGRES_PORT", "5433")
-    db = os.environ["POSTGRES_DB"]
-    user = os.environ.get("READONLY_USER", "pharmapulse_readonly")
-    password = os.environ["READONLY_PASSWORD"]
+    host = _get_secret("POSTGRES_HOST", "localhost")
+    port = _get_secret("POSTGRES_PORT", "5433")
+    db = _get_secret("POSTGRES_DB")
+    user = _get_secret("READONLY_USER", "pharmapulse_readonly")
+    password = _get_secret("READONLY_PASSWORD")
     return f"postgresql://{user}:{password}@{host}:{port}/{db}"
 
 
