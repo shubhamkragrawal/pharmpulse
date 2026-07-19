@@ -9,4 +9,4 @@ mlruns/
 dbt/.user.yml
 dbt/logs/
 dbt/target/
-docs/portfolio/
+docs/portfolio
