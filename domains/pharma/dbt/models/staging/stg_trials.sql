@@ -26,6 +26,9 @@ parsed as (
         payload -> 'protocolSection' -> 'statusModule' -> 'completionDateStruct' ->> 'date' as completion_date_raw,
         nullif(payload -> 'protocolSection' -> 'sponsorCollaboratorsModule' -> 'leadSponsor' ->> 'name', '') as sponsor_name,
         nullif(payload -> 'protocolSection' -> 'sponsorCollaboratorsModule' -> 'leadSponsor' ->> 'class', '') as sponsor_class,
+        (payload ->> 'hasResults')::boolean as has_results,
+        jsonb_array_length(payload -> 'protocolSection' -> 'outcomesModule' -> 'primaryOutcomes') as num_primary_outcomes,
+        jsonb_array_length(payload -> 'protocolSection' -> 'contactsLocationsModule' -> 'locations') as num_sites,
         fetched_at as source_fetched_at
     from source
 
@@ -54,6 +57,9 @@ final as (
         end as completion_date,
         sponsor_name,
         sponsor_class,
+        has_results,
+        num_primary_outcomes,
+        num_sites,
         source_fetched_at
     from parsed
 

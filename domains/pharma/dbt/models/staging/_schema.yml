@@ -78,6 +78,90 @@ models:
                   - UNKNOWN
               config:
                 where: "sponsor_class is not null"
+      - name: has_results
+        description: >
+          Top-level CT.gov flag for whether a results section has been submitted.
+          Always present (100% coverage) -- not null.
+        tests:
+          - not_null
+      - name: num_primary_outcomes
+        description: >
+          Count of protocolSection.outcomesModule.primaryOutcomes. NULL passthrough
+          strategy when outcomesModule (or the primaryOutcomes key within it) is
+          absent (~3% of rows) -- no imputation applied.
+      - name: num_sites
+        description: >
+          Count of protocolSection.contactsLocationsModule.locations. NULL
+          passthrough strategy when the module is absent or reports only central
+          contacts with no site locations (~10% of rows) -- no imputation applied.
+
+  - name: stg_trial_conditions
+    description: >
+      One row per (nct_id, condition_name) pair, unnested from
+      protocolSection.conditionsModule.conditions (free-text condition list,
+      ~99.8% of trials report at least one). A trial commonly reports multiple
+      conditions (only ~63% report exactly one), which is why this is a separate
+      bridge-feeding staging model rather than a column on stg_trials.
+    columns:
+      - name: nct_id
+        description: FK to stg_trials.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_trials')
+                field: nct_id
+      - name: condition_name
+        description: >
+          Free-text condition as reported by CT.gov, exact case/text preserved
+          (no normalization applied -- same policy as stg_sponsors.sponsor_name).
+          Rows with a blank/null condition are excluded (not a documented
+          missingness case -- CT.gov's array items are never legitimately blank).
+        tests:
+          - not_null
+
+  - name: stg_trial_interventions
+    description: >
+      One row per (nct_id, intervention_name, intervention_type) triple, unnested
+      from protocolSection.armsInterventionsModule.interventions (~89.9% of trials
+      report at least one). A trial commonly reports multiple interventions (only
+      ~47% report exactly one), which is why this is a separate bridge-feeding
+      staging model rather than a column on stg_trials.
+    columns:
+      - name: nct_id
+        description: FK to stg_trials.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_trials')
+                field: nct_id
+      - name: intervention_name
+        description: >
+          Intervention name as reported by CT.gov, exact case/text preserved (no
+          normalization applied). NULL passthrough for the small number (~0.02%)
+          of interventions missing a name -- those rows are excluded since a
+          nameless intervention has no usable grain.
+        tests:
+          - not_null
+      - name: intervention_type
+        description: CT.gov intervention type. Always present when an intervention is reported.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - DRUG
+                  - DEVICE
+                  - BIOLOGICAL
+                  - PROCEDURE
+                  - BEHAVIORAL
+                  - DIETARY_SUPPLEMENT
+                  - DIAGNOSTIC_TEST
+                  - RADIATION
+                  - GENETIC
+                  - COMBINATION_PRODUCT
+                  - OTHER
 
   - name: stg_sponsors
     description: >
