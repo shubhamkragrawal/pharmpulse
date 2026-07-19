@@ -3,6 +3,7 @@ services:
     image: postgres:16
     container_name: pharmapulse_postgres
     restart: unless-stopped
+    shm_size: '256mb'
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
