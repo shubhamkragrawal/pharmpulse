@@ -1,0 +1,214 @@
+version: 2
+
+models:
+  - name: metric_phase_transition
+    description: >
+      One row per trial (nct_id), bridge_trial_condition tie-broken to a single
+      representative condition per trial (ROW_NUMBER ORDER BY condition_key ASC).
+      Grouped by condition_name, not therapeutic_area -- dim_condition.therapeutic_area
+      is NULL for all rows as of M3 (no CT.gov source, no MeSH crosswalk); retained
+      as a NULL passthrough column so the interface doesn't change when a crosswalk
+      lands (see decisions.md). condition_phase2_trials/condition_phase3_trials/
+      condition_approved_trials and the three rate columns are window-function
+      aggregates repeated across every row in a condition_name group -- dedupe to
+      one row per condition_name for a funnel chart. All three rate columns are
+      relative-volume ratios, not true transition probabilities -- CT.gov has no
+      field linking a trial to its own phase-successor trial, so phase2/phase3
+      counts per condition are independent cross-sectional volumes and can exceed
+      100% (verified: 14 of 109 conditions with >=100 Phase-2 trials do). Approval
+      stage compounds this with a best-effort sponsor_name string match between
+      CT.gov lead-sponsor names and FDA applicant names (different namespaces, no
+      entity resolution) -- see the model's top-of-file comment and decisions.md.
+      fct_approvals is aggregated up from submission-event grain to application
+      grain before use, per M3's as-built note.
+    columns:
+      - name: nct_id
+        description: Natural key, one row per trial.
+        tests:
+          - not_null
+          - unique
+      - name: condition_key
+        description: FK to dim_condition (tie-broken representative condition). NULL when the trial has no bridge_trial_condition row.
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_condition')
+                field: condition_key
+              config:
+                where: "condition_key is not null"
+      - name: condition_name
+        description: Grouping dimension used in place of therapeutic_area (see model description).
+      - name: therapeutic_area
+        description: Always NULL as of M4 (see dim_condition). Reserved for a future MeSH crosswalk.
+      - name: grouping_by_condition_name
+        description: Constant TRUE, self-documents the condition_name-for-therapeutic_area substitution.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - true
+      - name: multi_condition_flag
+        description: TRUE when the trial had >1 condition in bridge_trial_condition (i.e. the tie-break discarded at least one condition). Audit column for whether the tie-break distorts phase transition rates.
+        tests:
+          - not_null
+      - name: phase
+        description: See fct_trials.phase. Raw passthrough, pipe-delimited for combined-phase trials.
+      - name: is_phase2
+        description: TRUE when phase contains PHASE2 (substring match, handles combined-phase strings).
+        tests:
+          - not_null
+      - name: is_phase3
+        description: TRUE when phase contains PHASE3 (substring match, handles combined-phase strings).
+        tests:
+          - not_null
+      - name: sponsor_name
+        description: CT.gov lead sponsor name (dim_sponsor), NULL when the trial has no sponsor_key.
+      - name: matched_to_fda
+        description: TRUE when this trial's normalized sponsor_name matched a normalized FDA applicant name in fct_approvals. Best-effort string match only -- see model caveat comment. Low match rate is expected, not a bug.
+        tests:
+          - not_null
+      - name: has_fda_approval
+        description: TRUE when matched_to_fda is TRUE and the matched FDA sponsor has at least one submission with submission_status = 'AP', aggregated up from submission-event grain.
+        tests:
+          - not_null
+      - name: condition_phase2_trials
+        description: Window aggregate, count of is_phase2 trials within this condition_name group.
+      - name: condition_phase3_trials
+        description: Window aggregate, count of is_phase3 trials within this condition_name group.
+      - name: condition_approved_trials
+        description: Window aggregate, count of matched_to_fda AND has_fda_approval trials within this condition_name group.
+      - name: phase2_to_phase3_rate
+        description: condition_phase3_trials / condition_phase2_trials, rounded to 4 decimal places. A relative-volume ratio, not a true transition probability -- can exceed 1.0 (14 of 109 conditions with >=100 Phase-2 trials do). See model caveat comment.
+      - name: phase3_to_approval_rate
+        description: condition_approved_trials / condition_phase3_trials, rounded to 4 decimal places. Directional/descriptive only -- see approval-stage caveat.
+      - name: phase2_to_approval_rate
+        description: condition_approved_trials / condition_phase2_trials, rounded to 4 decimal places. A relative-volume ratio, not a true transition probability -- directional/descriptive only, see model caveat comment.
+
+  - name: metric_sponsor_cohorts
+    description: >
+      One row per (cohort_year, activity_year). cohort_year = year of a sponsor's
+      earliest fct_trials.start_date; sponsors with an all-NULL start_date are
+      excluded from cohorting. A trial with a NULL completion_date is treated as
+      active only in its start year, not open-ended (see decisions.md).
+      trials_total/trials_completed/success_rate are reused from dim_sponsor (M3),
+      aggregated to cohort_year -- not recomputed from fct_trials.
+    columns:
+      - name: cohort_activity_key
+        description: Surrogate key, md5(cohort_year || activity_year).
+        tests:
+          - not_null
+          - unique
+      - name: cohort_year
+        description: Year of the sponsor cohort's earliest trial start_date.
+        tests:
+          - not_null
+      - name: activity_year
+        description: Calendar year in which at least one sponsor from this cohort had an active trial.
+        tests:
+          - not_null
+      - name: years_since_cohort
+        description: activity_year - cohort_year.
+        tests:
+          - not_null
+      - name: active_sponsor_count
+        description: Distinct sponsors from this cohort with an active trial in activity_year.
+        tests:
+          - not_null
+      - name: cohort_launch_sponsor_count
+        description: active_sponsor_count in the cohort's own launch year (window FIRST_VALUE), the survivorship baseline.
+        tests:
+          - not_null
+      - name: survivorship_rate
+        description: active_sponsor_count / cohort_launch_sponsor_count, rounded to 4 decimal places.
+        tests:
+          - not_null
+      - name: cohort_sponsor_count
+        description: Total distinct sponsors ever assigned to this cohort_year.
+      - name: cohort_total_trials
+        description: SUM(dim_sponsor.trials_total) across this cohort's sponsors. Reused, not recomputed.
+      - name: cohort_total_completed
+        description: SUM(dim_sponsor.trials_completed) across this cohort's sponsors. Reused, not recomputed.
+      - name: cohort_avg_success_rate
+        description: AVG(dim_sponsor.success_rate) across this cohort's sponsors, rounded to 4 decimal places. Reused, not recomputed.
+
+  - name: metric_duration_trends
+    description: >
+      One row per start_year. Median trial duration via PERCENTILE_CONT(0.5),
+      p25/p75 bands added in M5, YoY change via LAG(). Sourced only from
+      fct_trials date fields (no bridge join, no multi_condition_flag). No
+      phase dimension -- see metric_duration_trends_by_phase for that cut,
+      kept as a separate model so this one's numbers (already quoted in the
+      M4 notebook and decisions.md) don't shift.
+    columns:
+      - name: start_year
+        description: Year of fct_trials.start_date.
+        tests:
+          - not_null
+          - unique
+      - name: trial_count
+        description: Count of trials with a non-null duration_days in this start_year.
+        tests:
+          - not_null
+      - name: p25_duration_days
+        description: PERCENTILE_CONT(0.25) of duration_days for this start_year, rounded to 1 decimal place. Added in M5.
+        tests:
+          - not_null
+      - name: median_duration_days
+        description: PERCENTILE_CONT(0.5) of duration_days for this start_year, rounded to 1 decimal place.
+        tests:
+          - not_null
+      - name: p75_duration_days
+        description: PERCENTILE_CONT(0.75) of duration_days for this start_year, rounded to 1 decimal place. Added in M5.
+        tests:
+          - not_null
+      - name: prior_year_median_duration_days
+        description: LAG(median_duration_days) by start_year. NULL for the earliest start_year.
+      - name: yoy_change_days
+        description: median_duration_days - prior_year_median_duration_days. NULL for the earliest start_year.
+      - name: yoy_change_pct
+        description: yoy_change_days as a percentage of the prior year's median, rounded to 2 decimal places. NULL for the earliest start_year.
+
+  - name: metric_duration_trends_by_phase
+    description: >
+      One row per (start_year, phase). Added in M5 for the Streamlit duration-
+      trends dashboard's by-phase cut. phase is fct_trials' raw pipe-delimited
+      passthrough (e.g. "PHASE1|PHASE2" is its own row, not split). Trials
+      with a NULL phase (observational studies, ~24%) are excluded, not
+      bucketed into a fabricated "UNKNOWN". Kept separate from
+      metric_duration_trends so that model's M4-documented numbers don't
+      shift under a later milestone.
+    columns:
+      - name: duration_by_phase_key
+        description: Surrogate key, md5(start_year || phase).
+        tests:
+          - not_null
+          - unique
+      - name: start_year
+        description: Year of fct_trials.start_date.
+        tests:
+          - not_null
+      - name: phase
+        description: fct_trials.phase, raw passthrough (pipe-delimited for combined-phase trials).
+        tests:
+          - not_null
+      - name: trial_count
+        description: Count of trials with this (start_year, phase) and a non-null duration_days.
+        tests:
+          - not_null
+      - name: p25_duration_days
+        description: PERCENTILE_CONT(0.25) of duration_days for this (start_year, phase), rounded to 1 decimal place.
+        tests:
+          - not_null
+      - name: median_duration_days
+        description: PERCENTILE_CONT(0.5) of duration_days for this (start_year, phase), rounded to 1 decimal place.
+        tests:
+          - not_null
+      - name: p75_duration_days
+        description: PERCENTILE_CONT(0.75) of duration_days for this (start_year, phase), rounded to 1 decimal place.
+        tests:
+          - not_null
+      - name: prior_year_median_duration_days
+        description: LAG(median_duration_days) by start_year, partitioned by phase. NULL for each phase's earliest start_year.
+      - name: yoy_change_days
+        description: median_duration_days - prior_year_median_duration_days, partitioned by phase. NULL for each phase's earliest start_year.

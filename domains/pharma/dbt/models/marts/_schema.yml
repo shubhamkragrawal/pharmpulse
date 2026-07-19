@@ -207,6 +207,11 @@ models:
         description: Derived boolean, true when overall_status = 'TERMINATED'.
         tests:
           - not_null
+      - name: why_stopped
+        description: >
+          See stg_trials.why_stopped. Added in M5. Present for ~7.8% of trials,
+          spanning overall_status in (TERMINATED, WITHDRAWN, SUSPENDED) -- not
+          exclusive to TERMINATED. NULL passthrough for the rest.
       - name: has_results
         description: See stg_trials.has_results.
         tests:

@@ -16,3 +16,6 @@ models:
     marts:
       +materialized: table
       +schema: marts
+    metrics:
+      +materialized: table
+      +schema: metrics

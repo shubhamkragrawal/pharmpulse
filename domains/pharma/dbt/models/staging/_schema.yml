@@ -78,6 +78,13 @@ models:
                   - UNKNOWN
               config:
                 where: "sponsor_class is not null"
+      - name: why_stopped
+        description: >
+          Free-text reason a trial was stopped early (protocolSection.statusModule.whyStopped),
+          added in M5 for the Streamlit termination-reasons dashboard. Only present for
+          a subset of trials regardless of overall_status (~7.8% of rows overall) --
+          NULL passthrough, no imputation. Not restricted to overall_status = TERMINATED
+          at this layer (CT.gov populates it for some WITHDRAWN/SUSPENDED trials too).
       - name: has_results
         description: >
           Top-level CT.gov flag for whether a results section has been submitted.

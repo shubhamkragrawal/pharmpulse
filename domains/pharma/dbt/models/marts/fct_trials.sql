@@ -22,6 +22,7 @@ final as (
         trials.completion_date,
         trials.completion_date - trials.start_date as duration_days,
         trials.overall_status = 'TERMINATED' as is_terminated,
+        trials.why_stopped,
         trials.has_results,
         trials.num_primary_outcomes,
         trials.num_sites
