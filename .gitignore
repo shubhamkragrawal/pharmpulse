@@ -10,3 +10,5 @@ dbt/.user.yml
 dbt/logs/
 dbt/target/
 docs/portfolio/
+
+data/tableau_extracts/*.csv

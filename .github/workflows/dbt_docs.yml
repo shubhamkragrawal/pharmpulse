@@ -1,0 +1,69 @@
+name: dbt docs -> GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# NOTE: this job runs `dbt docs generate` against an EMPTY Postgres service
+# container -- no extraction, no dbt run/build. That's enough for the DAG
+# lineage graph (driven by manifest.json, which compiles from the project's
+# SQL and doesn't require live tables), but catalog.json's per-model column
+# metadata will be sparse since the relations don't actually exist in this
+# container. Fine for "publish the lineage graph"; not a substitute for
+# running against real data if column-level catalog detail matters later.
+
+jobs:
+  dbt-docs:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: ${{ vars.POSTGRES_DB || 'pharmapulse' }}
+          POSTGRES_USER: ${{ vars.POSTGRES_USER || 'pharmapulse_user' }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD || 'changeme' }}
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${{ vars.POSTGRES_DB || 'pharmapulse' }}
+      POSTGRES_USER: ${{ vars.POSTGRES_USER || 'pharmapulse_user' }}
+      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD || 'changeme' }}
+      DBT_PROFILES_DIR: ${{ github.workspace }}/dbt
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dbt-postgres
+        run: pip install dbt-postgres==1.11.0
+
+      - name: dbt deps / debug
+        working-directory: dbt
+        run: |
+          dbt debug
+
+      - name: dbt docs generate
+        working-directory: dbt
+        run: dbt docs generate
+
+      - name: Deploy to gh-pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: dbt/target
+          publish_branch: gh-pages
