@@ -1,0 +1,254 @@
+version: 2
+
+models:
+  - name: dim_sponsor
+    description: >
+      One row per distinct sponsor_name (from stg_sponsors). trials_total/
+      trials_completed/success_rate are aggregated from stg_trials via an inner
+      join, which is always 1:1-or-more since every stg_sponsors row is itself
+      derived from stg_trials.
+    columns:
+      - name: sponsor_key
+        description: Surrogate key, md5(sponsor_name).
+        tests:
+          - not_null
+          - unique
+      - name: sponsor_name
+        description: Natural key, lead sponsor name as reported by CT.gov.
+        tests:
+          - not_null
+          - unique
+      - name: sponsor_class
+        description: Mode-resolved sponsor class (see stg_sponsors).
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - AMBIG
+                  - FED
+                  - INDIV
+                  - INDUSTRY
+                  - NETWORK
+                  - NIH
+                  - OTHER
+                  - OTHER_GOV
+                  - UNKNOWN
+              config:
+                where: "sponsor_class is not null"
+      - name: trials_total
+        description: Count of trials for this sponsor.
+        tests:
+          - not_null
+      - name: trials_completed
+        description: Count of trials with overall_status = 'COMPLETED' for this sponsor.
+        tests:
+          - not_null
+      - name: success_rate
+        description: trials_completed / trials_total, rounded to 4 decimal places.
+        tests:
+          - not_null
+
+  - name: dim_condition
+    description: >
+      One row per distinct condition_name observed in stg_trial_conditions
+      (free-text, CT.gov conditionsModule.conditions). mesh_term and
+      therapeutic_area are always NULL -- CT.gov's derived MeSH terms are
+      study-level, not paired to individual free-text conditions, and no source
+      field exists for therapeutic_area at all (would require an external MeSH
+      tree-number crosswalk, out of scope for M3).
+    columns:
+      - name: condition_key
+        description: Surrogate key, md5(condition_name).
+        tests:
+          - not_null
+          - unique
+      - name: condition_name
+        description: Natural key, free-text condition exactly as reported by CT.gov.
+        tests:
+          - not_null
+          - unique
+      - name: mesh_term
+        description: Always NULL for M3 (see model description). Reserved for a future crosswalk.
+      - name: therapeutic_area
+        description: Always NULL for M3 (see model description). No CT.gov source field exists.
+
+  - name: dim_intervention
+    description: One row per distinct (intervention_name, intervention_type) pair observed in stg_trial_interventions.
+    columns:
+      - name: intervention_key
+        description: Surrogate key, md5(intervention_name || intervention_type).
+        tests:
+          - not_null
+          - unique
+      - name: intervention_name
+        description: Intervention name exactly as reported by CT.gov.
+        tests:
+          - not_null
+      - name: intervention_type
+        description: CT.gov intervention type.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - DRUG
+                  - DEVICE
+                  - BIOLOGICAL
+                  - PROCEDURE
+                  - BEHAVIORAL
+                  - DIETARY_SUPPLEMENT
+                  - DIAGNOSTIC_TEST
+                  - RADIATION
+                  - GENETIC
+                  - COMBINATION_PRODUCT
+                  - OTHER
+
+  - name: bridge_trial_condition
+    description: >
+      Many-to-many bridge between trials and conditions (grain = one row per
+      nct_id x condition_key). Replaces the spec's originally-listed single
+      condition_key FK on fct_trials -- real data shows only ~63% of trials
+      report exactly one condition, so a single FK on the fact grain would be
+      incorrect; this bridge is the standard star-schema pattern for M:N.
+    columns:
+      - name: bridge_key
+        description: Surrogate key, md5(nct_id || condition_key).
+        tests:
+          - not_null
+          - unique
+      - name: nct_id
+        description: FK to fct_trials.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_trials')
+                field: nct_id
+      - name: condition_key
+        description: FK to dim_condition.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_condition')
+                field: condition_key
+
+  - name: bridge_trial_intervention
+    description: >
+      Many-to-many bridge between trials and interventions (grain = one row per
+      nct_id x intervention_key). Same rationale as bridge_trial_condition --
+      only ~47% of trials report exactly one intervention.
+    columns:
+      - name: bridge_key
+        description: Surrogate key, md5(nct_id || intervention_key).
+        tests:
+          - not_null
+          - unique
+      - name: nct_id
+        description: FK to fct_trials.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_trials')
+                field: nct_id
+      - name: intervention_key
+        description: FK to dim_intervention.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_intervention')
+                field: intervention_key
+
+  - name: fct_trials
+    description: >
+      One row per ClinicalTrials.gov study (grain = nct_id). condition_key/
+      intervention_key are NOT columns here (see bridge_trial_condition /
+      bridge_trial_intervention description) -- reachable only via the bridges,
+      since a trial can report multiple conditions/interventions.
+    columns:
+      - name: nct_id
+        description: Natural key, ClinicalTrials.gov study identifier.
+        tests:
+          - not_null
+          - unique
+          - relationships:
+              arguments:
+                to: ref('stg_trials')
+                field: nct_id
+      - name: sponsor_key
+        description: FK to dim_sponsor. NULL when the trial has no lead sponsor name (~0.16% of trials).
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_sponsor')
+                field: sponsor_key
+              config:
+                where: "sponsor_key is not null"
+      - name: phase
+        description: See stg_trials.phase. NULL for observational studies by design (~24%).
+      - name: overall_status
+        description: See stg_trials.overall_status.
+        tests:
+          - not_null
+      - name: enrollment_count
+        description: See stg_trials.enrollment_count. NULL passthrough (~1.2%).
+      - name: start_date
+        description: See stg_trials.start_date.
+      - name: completion_date
+        description: See stg_trials.completion_date.
+      - name: duration_days
+        description: >
+          completion_date - start_date, in days. NULL when either date is NULL
+          (no imputation applied -- a missing endpoint means duration is
+          genuinely unknown, not zero).
+      - name: is_terminated
+        description: Derived boolean, true when overall_status = 'TERMINATED'.
+        tests:
+          - not_null
+      - name: has_results
+        description: See stg_trials.has_results.
+        tests:
+          - not_null
+      - name: num_primary_outcomes
+        description: See stg_trials.num_primary_outcomes. NULL passthrough (~3%).
+      - name: num_sites
+        description: See stg_trials.num_sites. NULL passthrough (~10%).
+
+  - name: fct_approvals
+    description: >
+      One row per (application_number, submission_type, submission_number)
+      submission event -- same grain as stg_approvals. The spec originally
+      listed application_number as this fact's sole PK, but M2 already
+      established (real data) that one application has multiple submission
+      events (ORIG + SUPPLs), each independently a regulatory action; collapsing
+      to one row per application would silently discard supplement-level
+      approvals, so this fact keeps the lossless 3-part grain instead.
+    columns:
+      - name: approval_key
+        description: Surrogate key, carried through from stg_approvals.
+        tests:
+          - not_null
+          - unique
+      - name: application_number
+        description: Drugs@FDA application identifier (not unique alone -- see approval_key).
+        tests:
+          - not_null
+      - name: sponsor_name
+        description: Applicant sponsor name as reported by openFDA (distinct namespace from CT.gov sponsor_name).
+      - name: submission_type
+        description: ORIG (original application) or SUPPL (supplement).
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - ORIG
+                  - SUPPL
+      - name: submission_status
+        description: AP (approved) or TA (tentatively approved). NULL passthrough for the small number (<0.01%) missing a status.
+      - name: approval_date
+        description: Date the submission reached submission_status (stg_approvals.submission_status_date). NULL passthrough for the handful (<0.01%) missing a date.
+      - name: review_priority
+        description: STANDARD or PRIORITY FDA review track. NULL passthrough (~43%, concentrated in older/manufacturing-only submissions).

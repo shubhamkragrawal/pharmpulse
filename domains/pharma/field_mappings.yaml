@@ -8,6 +8,12 @@ ct_studies:
   completion_date: protocolSection.statusModule.completionDateStruct.date
   sponsor_name: protocolSection.sponsorCollaboratorsModule.leadSponsor.name
   sponsor_class: protocolSection.sponsorCollaboratorsModule.leadSponsor.class
+  has_results: hasResults
+  num_primary_outcomes: protocolSection.outcomesModule.primaryOutcomes (array length)
+  num_sites: protocolSection.contactsLocationsModule.locations (array length)
+  condition_name: protocolSection.conditionsModule.conditions (array, unnested)
+  intervention_name: protocolSection.armsInterventionsModule.interventions[].name (array, unnested)
+  intervention_type: protocolSection.armsInterventionsModule.interventions[].type (array, unnested)
 
 fda_applications:
   application_number: application_number
