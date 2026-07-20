@@ -1,6 +1,19 @@
 # PharmaPulse
 
-![dbt CI](https://github.com/shubhamkragrawal/pharmpulse/actions/workflows/dbt_ci.yml/badge.svg)
+## Artifacts
+
+| Artifact | Link | Status |
+|---|---|---|
+| 📊 Streamlit explorer  | local only | ✅ |
+| 📈 Tableau Public dashboard | [View dashboard](https://public.tableau.com/views/PharmaPulse_17844427223200/Dashboard1) | ✅ live |
+| 📚 dbt lineage docs | [GitHub Pages](https://shubhamkragrawal.github.io/pharmpulse/) | ✅ live |
+| 🔬 Analysis notebook | [notebooks/01_pharma_analysis.ipynb](../notebooks/01_pharma_analysis.ipynb) | ✅ |
+| 📐 KPI framework | [docs/kpi_framework.md](../docs/kpi_framework.md) | ✅ |
+| 📋 Executive memo | [docs/executive_memo.md](../docs/executive_memo.md) | ✅ |
+| ⚙️ Airflow DAG | [pharmapulse_monthly](http://localhost:8080) - local only |✅ |
+| 🔁 dbt CI | ![dbt CI](https://github.com/shubhamkragrawal/pharmpulse/actions/workflows/dbt_ci.yml/badge.svg) | on PR |
+| 🔧 Metric models | `domains/pharma/dbt/models/metrics/` | ✅ |
+| 📋 decisions.md | [decisions.md](../decisions.md) | ✅ |
 
 A domain-agnostic ELT warehouse platform — pharma regulatory 
 data as the reference implementation.
@@ -9,12 +22,6 @@ Pulls from ClinicalTrials.gov (594K+ trials) and openFDA
 (29K+ FDA applications), transforms via dbt into a tested 
 star schema, and serves as the data foundation for a 
 6-project AI/ML portfolio.
-
-## Live artifacts
-
-- 📊 Streamlit explorer: http://localhost:8501 (local) | `<deploy URL TBD>`
-- 📈 Tableau Public dashboard: `<URL TBD — publish manually>`
-- 📚 dbt lineage docs: [Github Pages - Pharpulse dbt](https://shubhamkragrawal.github.io/pharmpulse/)
 
 ## Current status
 
@@ -114,8 +121,6 @@ transition rates are directional/relative-volume ratios, not true cohort
 probabilities — see the Pipeline Trust dashboard in the Streamlit explorer
 for the full data-quality context.
 
-📊 **[View on Tableau Public](https://public.tableau.com/views/PharmaPulse_17844427223200/Dashboard1?:language=en-US&:sid=&:redirect=auth&:display_count=n&:origin=viz_share_link))**
-
 ## Orchestration (Airflow)
 
 `pharmapulse_monthly` (`airflow/dags/pharmapulse_monthly.py`) runs the full
@@ -131,7 +136,7 @@ make airflow-up      # starts webserver + scheduler
 
 Airflow UI: http://localhost:8080
 
-DAG graph screenshot: [add after first successful run]
+DAG graph screenshot: ![DAG graph screenshot](data/airflow_asset/airflow_dag.png)
 
 Kill/retry and failure-callback proof: see `airflow/KILL_RETRY_PROOF.md`.
 
