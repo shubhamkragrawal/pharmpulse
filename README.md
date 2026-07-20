@@ -12,9 +12,9 @@ star schema, and serves as the data foundation for a
 
 ## Live artifacts
 
-📊 Streamlit explorer: http://localhost:8501 (local) | `<deploy URL TBD>`
-📈 Tableau Public dashboard: `<URL TBD — publish manually>`
-📚 dbt lineage docs: https://github.com/shubhamkragrawal/pharmpulse/deployments/github-pages
+- 📊 Streamlit explorer: http://localhost:8501 (local) | `<deploy URL TBD>`
+- 📈 Tableau Public dashboard: `<URL TBD — publish manually>`
+- 📚 dbt lineage docs: https://github.com/shubhamkragrawal/pharmpulse/deployments/github-pages
 
 ## Current status
 
