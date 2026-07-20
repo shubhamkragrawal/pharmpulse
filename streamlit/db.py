@@ -28,7 +28,7 @@ def _build_readonly_dsn() -> str:
     db = _get_secret("POSTGRES_DB")
     user = _get_secret("READONLY_USER", "pharmapulse_readonly")
     password = _get_secret("READONLY_PASSWORD")
-    return f"postgresql://{user}:{password}@{host}:{port}/{db}"
+    return f"postgresql://{user}:{password}@{host}:{port}/{db}?sslmode=prefer"
 
 
 @st.cache_resource

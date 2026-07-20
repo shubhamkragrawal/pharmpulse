@@ -1,3 +1,43 @@
+# --- Airflow (M7 orchestration) -------------------------------------------
+# LocalExecutor, single node -- not CeleryExecutor, per spec (this is a
+# portfolio deployment, not a multi-worker production cluster). Airflow's
+# own metadata (dag_runs, task_instances, ...) lives in a SEPARATE `airflow`
+# database on this SAME Postgres instance/service, not a second service and
+# not mixed into POSTGRES_DB -- see decisions.md, "Airflow metadata DB uses
+# a separate database on the same Postgres service". Created idempotently
+# by airflow-init via airflow/init_airflow_db.py (docker-entrypoint-initdb.d
+# scripts only run on first volume creation, which this repo's pgdata
+# volume already passed -- same gotcha as ops.extraction_log/readonly role).
+#
+# _PIP_ADDITIONAL_REQUIREMENTS is the official image's quick-install hook
+# for extra deps (our extractor code needs psycopg/requests/pyyaml; dbt
+# commands run inside these containers via BashOperator, so dbt-postgres
+# needs to be here too). The Airflow docs call this "convenient for
+# testing/dev, not recommended for production" -- a real deployment would
+# bake these into a custom image instead of reinstalling on every start.
+x-airflow-common: &airflow-common
+  image: apache/airflow:2.9.3-python3.12
+  environment: &airflow-common-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/airflow
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+    AIRFLOW__CORE__DEFAULT_TIMEZONE: UTC
+    _PIP_ADDITIONAL_REQUIREMENTS: "psycopg[binary]>=3.3.4 psycopg2-binary requests pyyaml python-dotenv dbt-postgres==1.11.0"
+    PYTHONPATH: /opt/airflow/pharmpulse
+    POSTGRES_HOST: postgres
+    POSTGRES_PORT: 5432
+    POSTGRES_DB: ${POSTGRES_DB}
+    POSTGRES_USER: ${POSTGRES_USER}
+    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+  volumes:
+    - .:/opt/airflow/pharmpulse
+    - ./airflow/dags:/opt/airflow/dags
+    - ./airflow/logs:/opt/airflow/logs
+  depends_on:
+    postgres:
+      condition: service_healthy
+
 services:
   postgres:
     image: postgres:16
@@ -35,6 +75,40 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+
+  airflow-init:
+    <<: *airflow-common
+    container_name: pharmapulse_airflow_init
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        python /opt/airflow/pharmpulse/airflow/init_airflow_db.py &&
+        airflow db init &&
+        airflow users create \
+          --username "${AIRFLOW_ADMIN_USER}" \
+          --password "${AIRFLOW_ADMIN_PASSWORD}" \
+          --firstname Admin --lastname User --role Admin \
+          --email "${AIRFLOW_ADMIN_EMAIL}" || true
+    restart: "no"
+
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: pharmapulse_airflow_webserver
+    command: webserver
+    ports:
+      - "8080:8080"
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: pharmapulse_airflow_scheduler
+    command: scheduler
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
 
 volumes:
   pgdata:

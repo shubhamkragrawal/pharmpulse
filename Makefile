@@ -1,4 +1,4 @@
-.PHONY: start stop extract test create-readonly-role tableau-extracts streamlit
+.PHONY: start stop extract test create-readonly-role tableau-extracts streamlit airflow-init airflow-up airflow-down airflow-logs trigger-dag
 
 start:
 	docker compose up -d
@@ -28,3 +28,21 @@ tableau-extracts:
 
 streamlit:
 	uv run streamlit run streamlit/app.py
+
+# Orchestration (M7). airflow-init is one-shot (creates the airflow metadata
+# DB, runs migrations, creates the admin user) -- run it once, or again after
+# a fresh volume/`docker compose down -v`. --wait blocks until it exits.
+airflow-init:
+	docker compose up airflow-init --wait
+
+airflow-up:
+	docker compose up airflow-webserver airflow-scheduler -d
+
+airflow-down:
+	docker compose stop airflow-webserver airflow-scheduler
+
+airflow-logs:
+	docker compose logs -f airflow-scheduler
+
+trigger-dag:
+	docker compose exec airflow-scheduler airflow dags trigger pharmapulse_daily

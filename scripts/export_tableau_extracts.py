@@ -59,7 +59,7 @@ def build_dsn() -> str:
     db = os.environ["POSTGRES_DB"]
     user = os.environ.get("READONLY_USER", "pharmapulse_readonly")
     password = os.environ["READONLY_PASSWORD"]
-    return f"postgresql://{user}:{password}@{host}:{port}/{db}"
+    return f"postgresql://{user}:{password}@{host}:{port}/{db}?sslmode=prefer"
 
 
 def run_query(conn: psycopg.Connection, sql: str) -> pd.DataFrame:
