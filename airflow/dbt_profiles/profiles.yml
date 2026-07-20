@@ -1,0 +1,12 @@
+pharmapulse:
+  target: airflow
+  outputs:
+    airflow:
+      type: postgres
+      host: postgres # Docker service name -- not localhost, not the 5433 host-side remap
+      port: 5432 # internal Docker network port, not the 5433 host-side remap (see decisions.md)
+      dbname: "{{ env_var('POSTGRES_DB') }}"
+      user: "{{ env_var('POSTGRES_USER') }}"
+      password: "{{ env_var('POSTGRES_PASSWORD') }}"
+      schema: staging
+      threads: 2 # conservative for Airflow's LocalExecutor sharing the host with other tasks
