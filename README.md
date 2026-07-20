@@ -91,14 +91,30 @@ make streamlit               # runs on http://localhost:8501
 ```
 Or via Docker: `docker compose up -d streamlit` (after `make create-readonly-role`).
 
-## Tableau
+## Tableau Public Dashboard
 
-`scripts/export_tableau_extracts.py` exports one CSV per dashboard to
-`data/tableau_extracts/`
+An executive-facing summary of the clinical trial landscape, built from the
+same marts/metrics layer as the Streamlit explorer but designed for a
+non-technical audience — three dashboards, no filters, findings-first layout.
 
-```bash
-make tableau-extracts   # regenerate after any dbt build
-```
+**Three dashboards:**
+- **Industry Overview** — approval volume over time, top FDA applicants,
+  how the trial landscape has grown since CT.gov launched in 2000
+- **Trial Success & Failure** — phase funnel (Phase 2 → Phase 3 → Approval)
+  across top conditions, termination rates by phase, stated reasons trials stop
+- **Sponsor Intelligence** — cohort survivorship curves (how long sponsors
+  stay active after their first trial), league table of top 50 sponsors by
+  trial volume and success rate
+
+**Built from:** `data/tableau_extracts/*.csv` — regenerate anytime with
+`make tableau-extracts` after a dbt build.
+
+**Note:** approval counts include generics/ANDAs (FDA namespace); phase
+transition rates are directional/relative-volume ratios, not true cohort
+probabilities — see the Pipeline Trust dashboard in the Streamlit explorer
+for the full data-quality context.
+
+📊 **[View on Tableau Public](https://public.tableau.com/views/PharmaPulse_17844427223200/Dashboard1?:language=en-US&:sid=&:redirect=auth&:display_count=n&:origin=viz_share_link))**
 
 ## Orchestration (Airflow)
 
