@@ -23,6 +23,7 @@ Pulls from ClinicalTrials.gov (594K+ trials) and openFDA
 star schema, and serves as the data foundation for a 
 6-project AI/ML portfolio.
 
+
 ## Current status
 
 #### Done
@@ -136,7 +137,10 @@ make airflow-up      # starts webserver + scheduler
 
 Airflow UI: http://localhost:8080
 
-DAG graph screenshot: ![DAG graph screenshot](data/airflow_asset/airflow_dag.png)
+| Airflow DAG Graph | DBT build | DBT test |
+|:---:|:---:|:---:|
+| <img src="data/airflow_asset/airflow_dag_complete.png" width="500"/> | <img src="data/airflow_asset/dbt_build.png" width="500"/> | <img src="data/airflow_asset/dbt_test.png" width="500"/> |
+
 
 Kill/retry and failure-callback proof: see `airflow/KILL_RETRY_PROOF.md`.
 
