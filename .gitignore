@@ -13,3 +13,4 @@ docs/portfolio/
 
 data/tableau_extracts/*.csv
 airflow/logs/
+claude.md
