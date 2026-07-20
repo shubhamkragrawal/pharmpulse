@@ -1,0 +1,83 @@
+name: dbt build (PR gate)
+
+# Runs `dbt build` (run + test) against a fresh, EMPTY postgres service
+# container -- only raw/ops schema DDL applied via the same init scripts
+# docker-compose.yml mounts locally (scripts/init_raw_schema.sql,
+# scripts/init_ops_schema.sql), no real extracted data. This is a
+# compilation + schema/test-syntax gate, not a data-correctness gate --
+# see decisions.md, "dbt CI workflow runs against empty schema init only".
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  dbt-build:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: ${{ vars.POSTGRES_DB || 'pharmapulse' }}
+          POSTGRES_USER: ${{ vars.POSTGRES_USER || 'pharmapulse_user' }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD || 'changeme' }}
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${{ vars.POSTGRES_DB || 'pharmapulse' }}
+      POSTGRES_USER: ${{ vars.POSTGRES_USER || 'pharmapulse_user' }}
+      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD || 'changeme' }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install dbt-postgres
+        run: uv pip install dbt-postgres --system
+
+      - name: Install psql client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Init raw + ops schemas (no data)
+        run: |
+          psql "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}" -f scripts/init_raw_schema.sql
+          psql "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}" -f scripts/init_ops_schema.sql
+
+      - name: Write dbt profiles.yml
+        run: |
+          mkdir -p /tmp/dbt_profiles
+          cat > /tmp/dbt_profiles/profiles.yml <<EOF
+          pharmapulse:
+            target: ci
+            outputs:
+              ci:
+                type: postgres
+                host: "${POSTGRES_HOST}"
+                port: ${POSTGRES_PORT}
+                user: "${POSTGRES_USER}"
+                password: "${POSTGRES_PASSWORD}"
+                dbname: "${POSTGRES_DB}"
+                schema: staging
+                threads: 4
+          EOF
+
+      - name: dbt build
+        run: dbt build --project-dir dbt --profiles-dir /tmp/dbt_profiles

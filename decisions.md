@@ -187,3 +187,120 @@
 - **Failure mode:** `catalog.json` (the per-model column-type detail behind the "Columns" tab in the dbt docs UI) will be sparse or empty for every model, since there are no real relations for dbt to introspect via `information_schema`. The lineage graph itself is unaffected — this only degrades the column-detail drill-down, not the DAG.
 - **Scaling story (10x/100x):** Unaffected by data volume, by construction — this workflow never touches real data. If column-level catalog detail in the published docs became a real requirement, the fix would be seeding a small fixture dataset into the CI Postgres (not running the real extraction), which is a scoped future addition, not implied by anything built here.
 - **Interview question this maps to:** "How do you publish documentation that depends on a database without running your full pipeline in CI?" / "What's the difference between what `manifest.json` and `catalog.json` each need to exist?"
+
+## Decision: dbt CI workflow runs against empty schema init only — no seed data
+- **What:** `.github/workflows/dbt_ci.yml` runs `dbt build` against a fresh postgres
+  service container with only the raw/ops schema DDL applied (init SQL scripts),
+  no actual extracted data.
+- **Why (vs. seeding fixture data):** dbt build in CI is a compilation and test
+  check, not a data correctness check — the 107 tests passing locally against
+  real data is the data-quality gate; CI's job is to catch model SQL syntax
+  errors and schema drift on PR. Seeding 594K+ real rows in CI would be slow,
+  rate-limited (re-extracting from live APIs), and unnecessary for what CI is
+  actually validating.
+- **Failure mode:** a dbt test that relies on referential integrity between real
+  data rows (e.g. a relationship test between `fct_trials` and `dim_sponsor`) will
+  vacuously pass in CI because both tables are empty — CI catches SQL errors
+  and schema issues, not data-level assertion failures. The real data-quality
+  gate is the local `dbt build` before pushing.
+- **Scaling story:** if data-level tests in CI became a real requirement, the fix
+  is a small fixture dataset (e.g. 1000 trials, 50 sponsors, 20 approvals)
+  committed to `tests/fixtures/` and loaded via `psql` before `dbt build` — not
+  re-running the full extraction.
+- **Interview question this maps to:** "What does your CI pipeline actually test vs. what does
+  it not test, and why?" — honest answer: SQL correctness and schema drift,
+  not data correctness at row level.
+
+## Decision: Airflow metadata DB uses a separate database on the same Postgres service
+- **What:** Airflow's metadata (`dag_runs`, `task_instances`, etc.) lives in a
+  new `airflow` database on the *same* `pharmapulse_postgres` service/container
+  that already hosts the PharmaPulse data (`raw`/`staging`/`marts`/`metrics`
+  schemas) — not a second `airflow-postgres` service. `airflow/init_airflow_db.py`
+  creates it idempotently (`CREATE DATABASE IF NOT EXISTS` isn't real Postgres
+  syntax, so the script checks `pg_database` first, then creates), run by the
+  `airflow-init` one-shot service before `airflow db init`. Not a
+  `docker-entrypoint-initdb.d` script — those only run on first volume
+  creation, and this repo's `pgdata` volume already existed before Airflow was
+  added (the exact same gotcha already hit twice: `ops.extraction_log` in M2,
+  the readonly role in M5).
+- **Why (vs. a second `airflow-postgres` service):** A second full Postgres
+  container is the more architecturally "correct" isolation (separate
+  failure domain, separate resource limits, separate backup schedule) and is
+  what a real team deployment should do. For a single-node portfolio
+  deployment, though, it's a second container to run, heal-check, and keep
+  alive for marginal benefit — logical-database separation on the same
+  instance already gets the two things that actually matter here: Airflow's
+  metadata schema can't collide with `raw`/`staging`/`marts`/`metrics` table
+  names, and `dbt build`/`dbt test` (which run against the PharmaPulse data
+  DB, per `airflow/dbt_profiles/profiles.yml`) never touch Airflow's own
+  bookkeeping tables or vice versa.
+- **Failure mode:** Both databases now share one Postgres process's resource
+  ceiling (`shm_size`, `max_connections`, disk I/O) — a runaway Airflow
+  metadata query or a heavy concurrent `dbt build` could contend with the
+  other's performance in a way two separate containers wouldn't. Also: a
+  `docker compose down -v` (dropping the `pgdata` volume) now takes out both
+  the data warehouse *and* Airflow's DAG run history in one command, where a
+  separate service would let you reset one without the other.
+- **Scaling story (10x/100x):** Logical separation on one instance is fine at
+  portfolio/single-developer scale. At real team scale, Airflow metadata
+  should move to its own managed instance (RDS/Cloud SQL) entirely separate
+  from the data warehouse — exactly the direction a second `airflow-postgres`
+  service here would have previewed, just not necessary to build now.
+- **Interview question this maps to:** "Why does Airflow need its own
+  database, and what happens if you share it with your data warehouse?"
+
+## Decision: separate `airflow/dbt_profiles/profiles.yml`, not the local dev `dbt/profiles.yml`
+- **What:** Airflow's `dbt_build`/`dbt_test` `BashOperator` tasks point at
+  `airflow/dbt_profiles/profiles.yml` via `--profiles-dir`, a different file
+  from the one used for local `dbt build` (`dbt/profiles.yml`). Both define
+  the same `pharmapulse` profile but different `target` names (`airflow` vs
+  `dev`) and, critically, a different `port` — `5432` (the internal Docker
+  network port, reachable as `postgres:5432` from inside any container on
+  the compose network) vs `5433` (the host-side remap `docker-compose.yml`
+  already uses so this dev machine's pre-existing native Postgres on 5432
+  doesn't collide — see the earlier "remapped local Postgres container to
+  host port 5433" decision).
+- **Why (vs. one shared profiles.yml with env-var-driven port):** `dbt/profiles.yml`
+  already reads `POSTGRES_PORT` from the environment, and locally that's
+  `5433`. Reusing the exact same file inside the Airflow containers would
+  mean either overriding `POSTGRES_PORT=5432` for Airflow specifically
+  (fragile — one shared env var name meaning two different things depending
+  on which process reads it) or leaving it at `5433`, which doesn't exist
+  inside the Docker network at all (only the host-side port mapping is
+  `5433`; containers on the same compose network always reach Postgres on
+  its real port, `5432`). A second, explicit profiles file removes the
+  ambiguity entirely instead of relying on a context-dependent env var.
+- **Failure mode:** Two `profiles.yml` files for one project is a real
+  divergence risk — a schema/materialization change made in one won't
+  propagate to the other. Mitigated by keeping `airflow/dbt_profiles/profiles.yml`
+  minimal (connection info only; `dbt_project.yml`'s model config, which is
+  what actually matters for correctness, is the single shared source both
+  profiles point at).
+- **Scaling story (10x/100x):** Unaffected by data volume. If more
+  environments were added (staging, prod), the pattern generalizes — one
+  `profiles.yml` per execution context, all pointing at the same
+  `dbt_project.yml`, rather than one file trying to be environment-aware via
+  conditionals.
+- **Interview question this maps to:** "Your local dbt profile and your
+  orchestrator's dbt profile disagree on a connection detail — how do you
+  avoid that becoming a silent bug?"
+
+## Decision: BashOperator for dbt_build/dbt_test, not Cosmos
+- **What:** `airflow/dags/pharmapulse_daily.py`'s `dbt_build`/`dbt_test` tasks
+  use `BashOperator` running dbt CLI commands directly.
+- **Why (vs. Cosmos):** Cosmos (`astronomer-cosmos`) provides task-level DAG
+  visualization per dbt model and better Airflow/dbt integration, but adds a
+  non-trivial dependency and configuration surface for a portfolio project
+  where the primary goal is proving orchestration competence, not dbt-Airflow
+  integration depth. The spec explicitly calls `BashOperator` the requirement
+  and Cosmos a stretch goal.
+- **Failure mode:** `BashOperator` dbt failure gives a bash exit code and
+  whatever dbt logs to stdout — no task-level breakdown of which dbt model
+  failed within the Airflow UI. You'd need to read the dbt logs (mounted at
+  `airflow/logs/`) to find the specific model.
+- **Scaling story (10x/100x):** Cosmos is the right answer at team scale —
+  per-model task visibility, smarter retries on individual failed models
+  rather than the whole `dbt build`. Worth naming as the explicit upgrade
+  path, not a silent gap.
+- **Interview question this maps to:** "You used BashOperator for dbt — what
+  would you change in production and why?"

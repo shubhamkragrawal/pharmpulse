@@ -1,5 +1,7 @@
 # PharmaPulse
 
+![dbt CI](../../actions/workflows/dbt_ci.yml/badge.svg)
+
 A domain-agnostic ELT warehouse platform — pharma regulatory 
 data as the reference implementation.
 
@@ -24,11 +26,25 @@ star schema, and serves as the data foundation for a
 - ✅ star schema marts (118/118 dbt tests green)
 - ✅ metrics layer + analysis notebook (M4)
 - ✅ Streamlit explorer (8 dashboards) + Tableau CSV extracts + dbt docs CI (M5)
+- ✅ KPI framework + executive memo + dbt build CI gate (M6)
+- ✅ Airflow orchestration — `pharmapulse_daily` DAG (M7)
 
 #### To-Do
 
-- Airflow orchestration
 - PySpark/FAERS appendix (optional)
+
+## Key findings
+
+1. Phase 2 → Phase 3 volume ratios can exceed 100% by construction (Diabetes at 203%) since CT.gov has no trial-lineage field — a directional signal, not a true cohort transition rate.
+2. Trial volume is dominated by academic/public institutions (Cairo University leads with 4,739 trials) while industry sponsors dominate by completion success rate (Boehringer Ingelheim, 87.0%).
+3. Median trial duration appears to drop sharply after ~2017, but that's right-censoring (still-enrolling trials excluded), not a real speed-up.
+
+See `docs/executive_memo.md` for the full write-up, business implications, and the data enrichment ask that would make all three cuttable by therapeutic area.
+
+## BA Deliverables
+
+- [`docs/kpi_framework.md`](docs/kpi_framework.md) — all 8 dashboard KPIs: business question, exact formula, source model, owner, refresh cadence, known caveats.
+- [`docs/executive_memo.md`](docs/executive_memo.md) — 1-page decision memo: 3 key findings and a scoped data-enrichment ask.
 
 ## Quick start
 ```bash
@@ -86,6 +102,25 @@ build directly — see decisions.md for the Streamlit-vs-Tableau rationale).
 ```bash
 make tableau-extracts   # regenerate after any dbt build
 ```
+
+## Orchestration (Airflow)
+
+`pharmapulse_daily` (`airflow/dags/pharmapulse_daily.py`) runs the full
+pipeline on a daily schedule: `extract_ctgov >> extract_fda >> load_raw >>
+dbt_build >> dbt_test >> notify`. LocalExecutor, single node — retries=2
+with exponential backoff, a 6-hour SLA on `dbt_test`, and a failure
+callback stubbed for Slack (`SLACK_WEBHOOK_URL`, not wired yet).
+
+```bash
+make airflow-init   # one-time: creates the airflow metadata DB + admin user
+make airflow-up      # starts webserver + scheduler
+```
+
+Airflow UI: http://localhost:8080
+
+DAG graph screenshot: [add after first successful run]
+
+Kill/retry and failure-callback proof: see `airflow/KILL_RETRY_PROOF.md`.
 
 ## Architecture
 Domain-agnostic core (`core/`) + pharma-specific implementation 
