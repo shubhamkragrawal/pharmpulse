@@ -7,13 +7,13 @@
 | 📊 Streamlit explorer  | local only | ✅ |
 | 📈 Tableau Public dashboard | [View dashboard](https://public.tableau.com/views/PharmaPulse_17844427223200/Dashboard1) | ✅ live |
 | 📚 dbt lineage docs | [GitHub Pages](https://shubhamkragrawal.github.io/pharmpulse/) | ✅ live |
-| 🔬 Analysis notebook | [notebooks/01_pharma_analysis.ipynb](../notebooks/01_pharma_analysis.ipynb) | ✅ |
-| 📐 KPI framework | [docs/kpi_framework.md](../docs/kpi_framework.md) | ✅ |
-| 📋 Executive memo | [docs/executive_memo.md](../docs/executive_memo.md) | ✅ |
+| 🔬 Analysis notebook | [notebooks/01_pharma_analysis.ipynb](../pharmpulse/notebooks/01_pharma_analysis.ipynb) | ✅ |
+| 📐 KPI framework | [docs/kpi_framework.md](../pharmpulse/docs/kpi_framework.md) | ✅ |
+| 📋 Executive memo | [docs/executive_memo.md](../pharmpulse/docs/executive_memo.md) | ✅ |
 | ⚙️ Airflow DAG | [pharmapulse_monthly](http://localhost:8080) - local only |✅ |
 | 🔁 dbt CI | ![dbt CI](https://github.com/shubhamkragrawal/pharmpulse/actions/workflows/dbt_ci.yml/badge.svg) | on PR |
 | 🔧 Metric models | `domains/pharma/dbt/models/metrics/` | ✅ |
-| 📋 decisions.md | [decisions.md](../decisions.md) | ✅ |
+| 📋 decisions.md | [decisions.md](../pharmpulse/decisions.md) | ✅ |
 
 A domain-agnostic ELT warehouse platform — pharma regulatory 
 data as the reference implementation.
