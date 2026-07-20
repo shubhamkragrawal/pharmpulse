@@ -14,7 +14,7 @@ star schema, and serves as the data foundation for a
 
 - 📊 Streamlit explorer: http://localhost:8501 (local) | `<deploy URL TBD>`
 - 📈 Tableau Public dashboard: `<URL TBD — publish manually>`
-- 📚 dbt lineage docs: https://github.com/shubhamkragrawal/pharmpulse/deployments/github-pages
+- 📚 dbt lineage docs: [Github Pages - Pharpulse dbt](https://shubhamkragrawal.github.io/pharmpulse/)
 
 ## Current status
 
@@ -24,10 +24,10 @@ star schema, and serves as the data foundation for a
 - ✅ raw extraction layer (594,309 trials, 29,218 FDA applications)
 - ✅ dbt staging models (24/24 tests green)
 - ✅ star schema marts (118/118 dbt tests green)
-- ✅ metrics layer + analysis notebook (M4)
-- ✅ Streamlit explorer (8 dashboards) + Tableau CSV extracts + dbt docs CI (M5)
-- ✅ KPI framework + executive memo + dbt build CI gate (M6)
-- ✅ Airflow orchestration — `pharmapulse_daily` DAG (M7)
+- ✅ metrics layer + analysis notebook 
+- ✅ Streamlit explorer (8 dashboards) + Tableau CSV extracts + dbt docs CI 
+- ✅ KPI framework + executive memo + dbt build CI gate 
+- ✅ Airflow orchestration — `pharmapulse_daily` DAG 
 
 #### To-Do
 
@@ -94,10 +94,7 @@ Or via Docker: `docker compose up -d streamlit` (after `make create-readonly-rol
 ## Tableau
 
 `scripts/export_tableau_extracts.py` exports one CSV per dashboard to
-`data/tableau_extracts/` (gitignored — regenerate locally, don't expect them
-in a fresh clone). These CSVs are the source for the Tableau Public
-dashboard, which is built manually (Tableau isn't something Claude Code can
-build directly — see decisions.md for the Streamlit-vs-Tableau rationale).
+`data/tableau_extracts/`
 
 ```bash
 make tableau-extracts   # regenerate after any dbt build
@@ -124,8 +121,7 @@ Kill/retry and failure-callback proof: see `airflow/KILL_RETRY_PROOF.md`.
 
 ## Architecture
 Domain-agnostic core (`core/`) + pharma-specific implementation 
-(`domains/pharma/`). Adding a second domain = new folder, 
-zero changes to core.
+(`domains/pharma/`). 
 
 See `decisions.md` for every non-trivial engineering decision 
 made during the build, with failure modes and scaling notes.
