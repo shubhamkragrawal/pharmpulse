@@ -1,6 +1,6 @@
 # PharmaPulse
 
-![dbt CI](../../actions/workflows/dbt_ci.yml/badge.svg)
+![dbt CI](https://github.com/shubhamkragrawal/pharmpulse/actions/workflows/dbt_ci.yml/badge.svg)
 
 A domain-agnostic ELT warehouse platform — pharma regulatory 
 data as the reference implementation.
@@ -27,7 +27,7 @@ star schema, and serves as the data foundation for a
 - ✅ metrics layer + analysis notebook 
 - ✅ Streamlit explorer (8 dashboards) + Tableau CSV extracts + dbt docs CI 
 - ✅ KPI framework + executive memo + dbt build CI gate 
-- ✅ Airflow orchestration — `pharmapulse_daily` DAG 
+- ✅ Airflow orchestration — `pharmapulse_monthly` DAG 
 
 #### To-Do
 
@@ -118,8 +118,8 @@ for the full data-quality context.
 
 ## Orchestration (Airflow)
 
-`pharmapulse_daily` (`airflow/dags/pharmapulse_daily.py`) runs the full
-pipeline on a daily schedule: `extract_ctgov >> extract_fda >> load_raw >>
+`pharmapulse_monthly` (`airflow/dags/pharmapulse_monthly.py`) runs the full
+pipeline on a monthly schedule: `extract_ctgov >> extract_fda >> load_raw >>
 dbt_build >> dbt_test >> notify`. LocalExecutor, single node — retries=2
 with exponential backoff, a 6-hour SLA on `dbt_test`, and a failure
 callback stubbed for Slack (`SLACK_WEBHOOK_URL`, not wired yet).
