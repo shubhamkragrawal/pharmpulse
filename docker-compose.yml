@@ -34,6 +34,7 @@ x-airflow-common: &airflow-common
     - .:/opt/airflow/pharmpulse
     - ./airflow/dags:/opt/airflow/dags
     - ./airflow/logs:/opt/airflow/logs
+    - ./airflow/dbt_profiles:/opt/airflow/dbt_profiles:ro
   depends_on:
     postgres:
       condition: service_healthy

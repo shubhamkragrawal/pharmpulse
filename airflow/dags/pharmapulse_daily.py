@@ -10,7 +10,7 @@ the whole repo at /opt/airflow/pharmpulse (see docker-compose.yml) so
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
+from datetime import timedelta, datetime,timezone
 
 import psycopg
 from airflow import DAG
@@ -149,9 +149,9 @@ default_args = {
 }
 
 with DAG(
-    dag_id="pharmapulse_daily",
-    schedule="@daily",
-    start_date=days_ago(1),
+    dag_id="pharmapulse_monthly",
+    schedule="@monthly",
+    start_date=datetime(2026, 7, 1, tzinfo=timezone.utc),
     catchup=False,
     max_active_runs=1,
     default_args=default_args,
