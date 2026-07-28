@@ -285,6 +285,51 @@
   orchestrator's dbt profile disagree on a connection detail — how do you
   avoid that becoming a silent bug?"
 
+## Decision: numberOfArms substituted with intervention_model
+- **What:** CT.gov API v2 does not expose numberOfArms as a field (confirmed
+  by inspecting raw payload JSON structure). Substituted intervention_model
+  (PARALLEL/CROSSOVER/SINGLE_GROUP/SEQUENTIAL/FACTORIAL) from designInfo.
+- **Why (vs. re-extracting with a different API):** intervention_model is
+  actually more informative for the TrialOutcome classifier — it captures
+  trial design structure rather than a raw arm count, and is available
+  in 100% of interventional trials vs. numberOfArms which AACT derives
+  from a separate table join.
+- **Failure mode:** TrialOutcome's feature spec references num_arms by name —
+  the dataset_builder.py must map intervention_model to a one-hot encoding
+  rather than a numeric feature. Document this in TrialOutcome decisions.md.
+- **Scaling story:** if arm count becomes important, it can be derived from
+  the armsInterventionsModule.armGroups array length in the payload —
+  a future dbt macro could compute this without re-extraction.
+- **Interview question this maps to:** "What did you do when a field in your spec wasn't
+  available in the actual data source?"
+
+## Decision: `eligibility_criteria` ships without a `not_null` test
+- **What:** The original plan for this batch of 5 TrialOutcome-feeding columns
+  called for a `not_null` test on `eligibility_criteria` ("most consistently
+  populated" of the 5). Live `dbt build` showed 1,070/594,543 trials (0.18%)
+  have a NULL `eligibilityModule.eligibilityCriteria`, failing the test —
+  and because `dbt build` skips every downstream-dependent node when a test
+  fails, this one failure cascaded into skipping 61 other tests across
+  `stg_sponsors`, `dim_sponsor`, `fct_trials`'s own tests, and all three
+  metrics models. Dropped the test; documented the real NULL rate in
+  `_schema.yml` instead (NULL passthrough, no imputation).
+- **Why (vs. keeping the test / downgrading to warn):** Matches this model's
+  own established convention — `not_null` is reserved for columns confirmed
+  100% populated (`has_results` is the only other one); everything else
+  gets NULL-passthrough documentation with the real percentage. A `warn`
+  severity would have kept the test declared but silently left the 1,070
+  NULLs uninvestigated, which doesn't fit that convention either.
+- **Failure mode:** Any downstream consumer (e.g. TrialOutcome's NLP feature
+  pipeline) that assumes every trial has eligibility text will need to
+  handle the ~0.18% NULL case explicitly — small enough to miss in a
+  spot-check, large enough (1,070 rows) to matter at the full-dataset scale
+  TrialOutcome trains on.
+- **Scaling story:** Unaffected by row volume — this is a real source-data
+  gap (some trials genuinely omit `eligibilityModule`), not a query issue.
+  Revisit only if CT.gov's coverage of the field changes.
+- **Interview question this maps to:** "You added a not_null test that seemed
+  safe based on a rough estimate — the real data disagreed. What did you do?"
+
 ## Decision: BashOperator for dbt_build/dbt_test, not Cosmos
 - **What:** `airflow/dags/pharmapulse_daily.py`'s `dbt_build`/`dbt_test` tasks
   use `BashOperator` running dbt CLI commands directly.

@@ -101,6 +101,32 @@ models:
           Count of protocolSection.contactsLocationsModule.locations. NULL
           passthrough strategy when the module is absent or reports only central
           contacts with no site locations (~10% of rows) -- no imputation applied.
+      - name: allocation
+        description: >
+          Trial randomization method (RANDOMIZED, NON_RANDOMIZED).
+          NULL for observational studies.
+      - name: masking
+        description: >
+          Blinding level (NONE, SINGLE, DOUBLE, TRIPLE, QUADRUPLE).
+          NULL for observational studies and unblinded trials.
+      - name: intervention_model
+        description: >
+          Trial design model (PARALLEL, CROSSOVER, SINGLE_GROUP,
+          SEQUENTIAL, FACTORIAL). Substituted for numberOfArms which
+          is not available in CT.gov API v2 -- documented in decisions.md.
+      - name: has_dmc
+        description: >
+          Whether the trial has a Data Monitoring Committee. Boolean.
+          NULL where not reported. High-signal feature for trial quality
+          per TrialOutcome spec cost matrix.
+      - name: eligibility_criteria
+        description: >
+          Free-text inclusion/exclusion criteria from the trial protocol.
+          Used for NLP feature engineering in TrialOutcome. Can be very
+          long (>10KB for complex trials). NULL passthrough strategy
+          (~0.18% of rows, 1,070/594,543) -- no imputation applied; not
+          100% populated so no not_null test (see M3's has_results for
+          the one column in this model that qualifies for that test).
 
   - name: stg_trial_conditions
     description: >

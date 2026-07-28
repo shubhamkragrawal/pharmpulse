@@ -220,6 +220,28 @@ models:
         description: See stg_trials.num_primary_outcomes. NULL passthrough (~3%).
       - name: num_sites
         description: See stg_trials.num_sites. NULL passthrough (~10%).
+      - name: allocation
+        description: >
+          Trial randomization method (RANDOMIZED, NON_RANDOMIZED).
+          NULL for observational studies.
+      - name: masking
+        description: >
+          Blinding level (NONE, SINGLE, DOUBLE, TRIPLE, QUADRUPLE).
+          NULL for observational studies and unblinded trials.
+      - name: intervention_model
+        description: >
+          Trial design model (PARALLEL, CROSSOVER, SINGLE_GROUP,
+          SEQUENTIAL, FACTORIAL). Substituted for numberOfArms which
+          is not available in CT.gov API v2 -- documented in decisions.md.
+      - name: has_dmc
+        description: >
+          Whether the trial has a Data Monitoring Committee. Boolean.
+          NULL where not reported. High-signal feature for trial quality
+          per TrialOutcome spec cost matrix.
+      - name: eligibility_criteria
+        description: >
+          See stg_trials.eligibility_criteria. NULL passthrough (~0.18%,
+          1,070/594,543 trials) -- no imputation applied.
 
   - name: fct_approvals
     description: >

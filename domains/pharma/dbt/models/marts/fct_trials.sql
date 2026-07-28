@@ -25,7 +25,12 @@ final as (
         trials.why_stopped,
         trials.has_results,
         trials.num_primary_outcomes,
-        trials.num_sites
+        trials.num_sites,
+        trials.allocation,
+        trials.masking,
+        trials.intervention_model,
+        trials.has_dmc,
+        trials.eligibility_criteria
     from trials
     left join sponsors on trials.sponsor_name = sponsors.sponsor_name
 

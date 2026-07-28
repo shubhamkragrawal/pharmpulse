@@ -30,6 +30,14 @@ parsed as (
         (payload ->> 'hasResults')::boolean as has_results,
         jsonb_array_length(payload -> 'protocolSection' -> 'outcomesModule' -> 'primaryOutcomes') as num_primary_outcomes,
         jsonb_array_length(payload -> 'protocolSection' -> 'contactsLocationsModule' -> 'locations') as num_sites,
+        payload -> 'protocolSection' -> 'designModule' -> 'designInfo' ->> 'allocation' as allocation,
+        payload -> 'protocolSection' -> 'designModule' -> 'designInfo' -> 'maskingInfo' ->> 'masking' as masking,
+        -- CT.gov API v2 does not expose numberOfArms as a top-level field (confirmed by
+        -- inspecting raw payload). intervention_model (PARALLEL/CROSSOVER/SINGLE_GROUP/
+        -- SEQUENTIAL/FACTORIAL) substituted instead -- see decisions.md.
+        payload -> 'protocolSection' -> 'designModule' -> 'designInfo' ->> 'interventionModel' as intervention_model,
+        (payload -> 'protocolSection' -> 'oversightModule' ->> 'oversightHasDmc')::boolean as has_dmc,
+        payload -> 'protocolSection' -> 'eligibilityModule' ->> 'eligibilityCriteria' as eligibility_criteria,
         fetched_at as source_fetched_at
     from source
 
@@ -62,6 +70,11 @@ final as (
         has_results,
         num_primary_outcomes,
         num_sites,
+        allocation,
+        masking,
+        intervention_model,
+        has_dmc,
+        eligibility_criteria,
         source_fetched_at
     from parsed
 
