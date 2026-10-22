@@ -1,5 +1,37 @@
 # PharmaPulse
 
+A recoverable ELT and analytics platform over **594,309 ClinicalTrials.gov trials**
+and **29,218 openFDA applications**, using PostgreSQL, dbt, Airflow, Tableau, and
+Streamlit. The core ingestion layer is reusable; pharma is the reference domain.
+
+```mermaid
+flowchart LR
+    A[ClinicalTrials.gov + openFDA] --> B[Paginated extraction + checkpoints]
+    B --> C[PostgreSQL raw: idempotent upserts]
+    C --> D[dbt staging: 24/24 tests]
+    D --> E[dbt marts: 118/118 tests]
+    E --> F[Metrics + read-only Streamlit]
+    E --> G[Tableau Public + dbt lineage]
+    H[Local Airflow orchestration] -.-> B
+    H -.-> D
+```
+
+## Evidence and operating scope
+
+| Evidence | Recorded result / boundary |
+|---|---|
+| Ingestion scale | 594,309 trial records; 29,218 FDA applications in the recorded build |
+| Data tests | 24/24 staging and 118/118 mart tests in the recorded local dbt build |
+| Recovery | Page/cursor checkpoints resume interrupted ingestion; natural-key upserts absorb duplicate records |
+| Recovery limitation | One writer per source is assumed; checkpoint updates do not enforce concurrency ordering |
+| Serving | Streamlit and Airflow operate locally; Tableau Public and dbt lineage have public links below |
+| Notifications | Slack failure callback is a logging stub; webhook delivery remains unwired |
+
+See [recovery decisions](decisions.md) and the [local kill/retry walkthrough](airflow/KILL_RETRY_PROOF.md).
+These counts describe the recorded build, rather than a fresh run against today's APIs.
+Phase-volume ratios are directional comparisons, not cohort transition probabilities;
+recent-duration analysis is affected by right-censoring.
+
 ## Artifacts
 
 | Artifact | Link | Status |
@@ -7,13 +39,13 @@
 | 📊 Streamlit explorer  | local only | ✅ |
 | 📈 Tableau Public dashboard | [View dashboard](https://public.tableau.com/views/PharmaPulse_17844427223200/Dashboard1) | ✅ live |
 | 📚 dbt lineage docs | [GitHub Pages](https://shubhamkragrawal.github.io/pharmpulse/) | ✅ live |
-| 🔬 Analysis notebook | [notebooks/01_pharma_analysis.ipynb](../pharmpulse/notebooks/01_pharma_analysis.ipynb) | ✅ |
-| 📐 KPI framework | [docs/kpi_framework.md](../pharmpulse/docs/kpi_framework.md) | ✅ |
-| 📋 Executive memo | [docs/executive_memo.md](../pharmpulse/docs/executive_memo.md) | ✅ |
+| 🔬 Analysis notebook | [notebooks/01_pharma_analysis.ipynb](notebooks/01_pharma_analysis.ipynb) | ✅ |
+| 📐 KPI framework | [docs/kpi_framework.md](docs/kpi_framework.md) | ✅ |
+| 📋 Executive memo | [docs/executive_memo.md](docs/executive_memo.md) | ✅ |
 | ⚙️ Airflow DAG | [pharmapulse_monthly](http://localhost:8080) - local only |✅ |
 | 🔁 dbt CI | ![dbt CI](https://github.com/shubhamkragrawal/pharmpulse/actions/workflows/dbt_ci.yml/badge.svg) | on PR |
 | 🔧 Metric models | `domains/pharma/dbt/models/metrics/` | ✅ |
-| 📋 decisions.md | [decisions.md](../pharmpulse/decisions.md) | ✅ |
+| 📋 decisions.md | [decisions.md](decisions.md) | ✅ |
 
 A domain-agnostic ELT warehouse platform — pharma regulatory 
 data as the reference implementation.
@@ -158,4 +190,4 @@ portfolio — every downstream project (ML prediction, NER,
 agentic RAG, causal inference, open benchmarking) reads 
 from this warehouse.
 
-Full portfolio: [coming soon]
+Full portfolio: [Shubham Kumar Agrawal](https://shubhamkragrawal.github.io)
